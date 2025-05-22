@@ -1,0 +1,33 @@
+# Virtual Environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and OS specific
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Output files (optional, but good if you only want to track the script)
+# *.png
+# *.jpg
+# *.jpeg
+# *.gif
+# You might want to commit example input/output, so adjust as needed.
+# For now, let's ignore dummy files specifically:
+dummy_*.png
+dummy_*.jpg
+github_profile_ready.*
+github_profile_small_ready.*
+
+
+# If you create distribution artifacts
+dist/
+build/
+*.egg-info/
