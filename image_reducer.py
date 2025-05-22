@@ -1,12 +1,10 @@
 import os
-from PIL import Image, UnidentifiedImageError, ImageFile, ImageTk # Add ImageTk for GUI
+from PIL import Image, UnidentifiedImageError, ImageFile, ImageTk
 import io
-
-# --- GUI Imports ---
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-# --- Constants (from your original script) ---
+# --- Constants ---
 TARGET_MAX_BYTES = 0.98 * 1024 * 1024
 RECOMMENDED_DIMENSION = 500
 MIN_DIMENSION = 200
@@ -18,9 +16,6 @@ DIMENSION_SCALE_STEP = 0.1
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def reduce_image_for_github(input_image_path):
-    # Returns: (success_boolean, image_data_bytes, suggested_extension_string, final_w, final_h, final_size_kb)
-    # or (False, None, None, None, None, None) on failure
-
     print(f"Starting reduction for: {input_image_path}")
     if not os.path.exists(input_image_path):
         print(f"Error: Input file not found at '{input_image_path}'")
@@ -40,34 +35,53 @@ def reduce_image_for_github(input_image_path):
             print(f"Image already under target size ({TARGET_MAX_BYTES / 1024:.2f} KB). Optimizing.")
             temp_buffer_small = io.BytesIO()
             current_img_copy = img.copy()
-            final_save_format_small = original_format
-            extension_small = ".dat" 
+            
+            # Refinement A: Streamlined logic for "already small"
+            final_save_format_small = None
+            extension_small = None
 
+            if original_format == "PNG":
+                final_save_format_small = "PNG"
+                extension_small = ".png"
+            elif original_format == "JPEG":
+                final_save_format_small = "JPEG"
+                extension_small = ".jpg"
+            elif original_format == "GIF":
+                final_save_format_small = "PNG" # GIFs become PNGs
+                extension_small = ".png"
+                current_img_copy.seek(0)
+                if current_img_copy.mode == 'P' and 'transparency' in current_img_copy.info:
+                    current_img_copy = current_img_copy.convert("RGBA")
+                elif current_img_copy.mode != 'RGB' and current_img_copy.mode != 'RGBA':
+                    current_img_copy = current_img_copy.convert("RGB")
+            else: # Other formats, decide based on alpha
+                has_alpha_small = current_img_copy.mode in ('RGBA', 'LA') or \
+                               (current_img_copy.mode == 'P' and 'transparency' in current_img_copy.info)
+                if has_alpha_small:
+                    final_save_format_small = "PNG"
+                    extension_small = ".png"
+                    if current_img_copy.mode != 'RGBA':
+                        current_img_copy = current_img_copy.convert("RGBA")
+                else:
+                    final_save_format_small = "JPEG"
+                    extension_small = ".jpg"
+                    if current_img_copy.mode != 'RGB':
+                        current_img_copy = current_img_copy.convert("RGB")
+            
             try:
-                if original_format == "PNG":
-                    final_save_format_small = "PNG"; extension_small = ".png"
+                if final_save_format_small == "PNG":
                     current_img_copy.save(temp_buffer_small, format="PNG", optimize=True)
-                elif original_format == "JPEG":
-                    final_save_format_small = "JPEG"; extension_small = ".jpg"
+                elif final_save_format_small == "JPEG":
                     current_img_copy.save(temp_buffer_small, format="JPEG", quality=95, optimize=True, progressive=True)
-                elif original_format == "GIF":
-                    final_save_format_small = "PNG"; extension_small = ".png"
-                    current_img_copy.seek(0)
-                    if current_img_copy.mode == 'P' and 'transparency' in current_img_copy.info: current_img_copy = current_img_copy.convert("RGBA")
-                    elif current_img_copy.mode != 'RGB' and current_img_copy.mode != 'RGBA': current_img_copy = current_img_copy.convert("RGB")
+                else:
+                    # Fallback for unhandled original formats that might not have alpha logic clearly defined above
+                    # This part could be refined if more specific formats need handling
+                    print(f"Warning: Optimizing unknown original format '{original_format}'. Attempting to save as PNG.")
+                    final_save_format_small = "PNG"
+                    extension_small = ".png"
+                    if current_img_copy.mode not in ('RGBA', 'RGB', 'L'): current_img_copy = current_img_copy.convert('RGB') # ensure basic mode
                     current_img_copy.save(temp_buffer_small, format="PNG", optimize=True)
-                else: 
-                    has_alpha_small = current_img_copy.mode in ('RGBA', 'LA') or \
-                                   (current_img_copy.mode == 'P' and 'transparency' in current_img_copy.info)
-                    if has_alpha_small:
-                        final_save_format_small = "PNG"; extension_small = ".png"
-                        if current_img_copy.mode != 'RGBA': current_img_copy = current_img_copy.convert("RGBA")
-                        current_img_copy.save(temp_buffer_small, format="PNG", optimize=True)
-                    else:
-                        final_save_format_small = "JPEG"; extension_small = ".jpg"
-                        if current_img_copy.mode != 'RGB': current_img_copy = current_img_copy.convert("RGB")
-                        current_img_copy.save(temp_buffer_small, format="JPEG", quality=95, optimize=True, progressive=True)
-                
+
                 optimized_data = temp_buffer_small.getvalue()
                 final_size_kb = len(optimized_data) / 1024.0
                 print(f"Image optimized. Final format: {final_save_format_small}, Final size: {final_size_kb:.2f} KB")
@@ -129,7 +143,7 @@ def reduce_image_for_github(input_image_path):
                          final_image_for_jpeg = image_to_save_this_iteration.convert('RGB')
                     if final_image_for_jpeg.mode not in ('RGB', 'L'):
                         final_image_for_jpeg = final_image_for_jpeg.convert('RGB')
-                    print(f"  Saving as JPEG (Quality: {current_jpeg_quality}).") # Moved print after conversion
+                    print(f"  Saving as JPEG (Quality: {current_jpeg_quality}).")
                     final_image_for_jpeg.save(temp_buffer, format="JPEG", quality=current_jpeg_quality, optimize=True, progressive=True)
                 elif final_processing_save_format == "PNG":
                     print("  Saving as PNG (optimized).")
@@ -156,17 +170,17 @@ def reduce_image_for_github(input_image_path):
 
             if final_processing_save_format == "JPEG" and current_jpeg_quality > JPEG_MIN_QUALITY:
                 current_jpeg_quality -= JPEG_QUALITY_STEP
-                print(f"  Reducing JPEG quality to: {current_jpeg_quality}") # Added print for clarity
+                print(f"  Reducing JPEG quality to: {current_jpeg_quality}")
             else:
                 current_scale -= DIMENSION_SCALE_STEP
                 potential_next_w = int(base_width * current_scale); potential_next_h = int(base_height * current_scale)
                 if current_scale < 0.001 or potential_next_w < MIN_DIMENSION or potential_next_h < MIN_DIMENSION :
-                    print(f"  Next scale ({current_scale:.2f}) would violate MIN_DIMENSION or is too small. Stopping reduction.") # Added print
+                    print(f"  Next scale ({current_scale:.2f}) would violate MIN_DIMENSION or is too small. Stopping reduction.")
                     break 
-                print(f"  Reducing scale to: {current_scale:.2f}") # Added print
+                print(f"  Reducing scale to: {current_scale:.2f}")
                 if final_processing_save_format == "JPEG":
                     current_jpeg_quality = 85
-                    print(f"  Resetting JPEG quality to {current_jpeg_quality} after scaling.") # Added print
+                    print(f"  Resetting JPEG quality to {current_jpeg_quality} after scaling.")
         
         print(f"\nFailed to reduce image. Last size: {last_attempted_size_bytes / 1024:.2f} KB.")
         return False, None, None, None, None, None
@@ -197,8 +211,8 @@ class ImageReducerApp:
         self.filepath_label = tk.Label(main_frame, text="No image selected", wraplength=480, bg='#f0f0f0', font=default_font)
         self.filepath_label.pack(pady=5)
         
-        self.thumbnail_label = tk.Label(main_frame, bg='#dddddd') # Placeholder for thumbnail
-        self.thumbnail_label.pack(pady=10,  fill=tk.BOTH, expand=True) # Allow it to expand
+        self.thumbnail_label = tk.Label(main_frame, bg='#dddddd')
+        self.thumbnail_label.pack(pady=10,  fill=tk.BOTH, expand=True)
         
         self.process_button = tk.Button(main_frame, text="Process Image", command=self.process_image, state=tk.DISABLED, font=button_font, bg='#ccffcc', width=20)
         self.process_button.pack(pady=5)
@@ -222,14 +236,11 @@ class ImageReducerApp:
     def display_thumbnail(self, image_path):
         try:
             img = Image.open(image_path)
-            # Calculate aspect ratio to fit thumbnail_label without distortion
-            # Assuming thumbnail_label has a decent size, e.g., self.thumbnail_label.winfo_width()
-            # For simplicity, using a fixed max size for now.
-            max_thumb_w, max_thumb_h = 150, 150 # Or get from label size later
+            max_thumb_w, max_thumb_h = 150, 150
             img.thumbnail((max_thumb_w, max_thumb_h), Image.Resampling.LANCZOS)
             
             photo = ImageTk.PhotoImage(img)
-            self.thumbnail_label.config(image=photo, text="") # Clear any "Preview N/A" text
+            self.thumbnail_label.config(image=photo, text="")
             self.thumbnail_label.image = photo 
         except Exception as e:
             self.thumbnail_label.config(image=None, text="Preview N/A")
@@ -253,21 +264,19 @@ class ImageReducerApp:
             original_name_no_ext = os.path.splitext(original_basename)[0]
             suggested_filename = f"{original_name_no_ext}_github{suggested_ext}"
 
-            file_types_map = {".jpg": ("JPEG image", "*.jpg"), ".png": ("PNG image", "*.png")}
-            current_file_type = file_types_map.get(suggested_ext, ("All files", "*.*"))
-            all_file_types = [current_file_type]
-            for ext, desc_pattern in file_types_map.items():
-                if ext != suggested_ext:
-                    all_file_types.append(desc_pattern)
-            if current_file_type[1] != "*.*": # Add "All files" if not already the primary
-                 all_file_types.append(("All files", "*.*"))
-
+            # Refinement B: Simplified filetypes for asksaveasfilename
+            if suggested_ext == ".jpg":
+                filetypes = [("JPEG image", "*.jpg"), ("PNG image", "*.png"), ("All files", "*.*")]
+            elif suggested_ext == ".png":
+                filetypes = [("PNG image", "*.png"), ("JPEG image", "*.jpg"), ("All files", "*.*")]
+            else: # Should not happen with current logic but as fallback
+                filetypes = [("All files", "*.*")]
 
             save_path = filedialog.asksaveasfilename(
                 initialfile=suggested_filename,
                 title="Save Processed Image As...",
                 defaultextension=suggested_ext,
-                filetypes=all_file_types
+                filetypes=filetypes # Use the simplified list
             )
 
             if save_path:
@@ -295,18 +304,14 @@ class ImageReducerApp:
              messagebox.showerror("Processing Error", "Processing reported success but no image data was returned.")
              self.status_label.config(text="Internal error: No image data.", fg="red")
         else: 
-            # If reduce_image_for_github returned False, specific errors are printed to console
-            # A generic GUI message is sufficient here unless more detailed error passing is implemented
             messagebox.showerror("Processing Failed", "Image processing failed. See console for details.")
             self.status_label.config(text="Processing failed. Check console.", fg="red")
         
-        # Optionally reset GUI for next image
-        self.input_image_path = None # Reset after processing
+        self.input_image_path = None 
         self.filepath_label.config(text="No image selected")
         self.process_button.config(state=tk.DISABLED)
-        self.thumbnail_label.config(image=None, text="") # Clear thumbnail
+        self.thumbnail_label.config(image=None, text="")
         self.thumbnail_label.image = None
-
 
 if __name__ == "__main__":
     root = tk.Tk()
