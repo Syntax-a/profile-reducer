@@ -2,8 +2,6 @@
 
 A simple Python application with a Graphical User Interface (GUI) to help you reduce the file size of images to be suitable for GitHub profile pictures (which have a 1MB limit). The script aims to get the image under 1MB while preserving quality and handling transparency.
 
-![Screenshot of the GUI](placeholder_screenshot.png) 
-*(You'll replace placeholder_screenshot.png later if you add a screenshot)*
 
 ## Features
 
